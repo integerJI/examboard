@@ -334,25 +334,39 @@ async function renderGuide() {
     : `<div class="p-head"><span class="tag">${phase === 'day' ? 'today' : 'd-' + dd}</span><span class="p-sub mono">확인 ${esc(g.checkedAt)}</span></div><h3 class="p-title">${esc(g.title)} ${phase === 'day' ? '— 오늘이에요' : `— D-${dd}`}</h3>`;
   const dates = (g.dates || []).slice().sort((a, b) => a.date.localeCompare(b.date));
   const nextIdx = dates.findIndex(x => dayDiff(x.end || x.date) >= 0);
-  const timeline = dates.length ? `<div class="g-block"><h4 class="sub-h">주요 일정</h4><ol class="g-dates">${dates.map((x, i) => {
+  const dateLi = (x, i) => {
     const past = dayDiff(x.end || x.date) < 0, d0 = dayDiff(x.date);
     const when = x.end ? `${md(x.date)} ~ ${md(x.end)}` : md(x.date);
     return `<li class="${past ? 'past' : i === nextIdx ? 'next' : ''}"><span class="g-when num">${when}</span><span class="g-what">${esc(x.label)}${x.note ? ` <span class="flat">· ${esc(x.note)}</span>` : ''}</span><span class="g-dd mono">${past ? '지남' : d0 > 0 ? `D-${d0}` : '진행 중'}</span>${srcLink(x.url)}</li>`;
-  }).join('')}</ol></div>` : '';
+  };
+  /* 일정: 다가오는 4개만 펼치고 전체는 접어 둔다 */
+  const from = nextIdx < 0 ? Math.max(0, dates.length - 3) : nextIdx, shown = dates.slice(from, from + 4);
+  const timeline = dates.length ? `<div class="g-block"><h4 class="sub-h">주요 일정</h4><ol class="g-dates">${shown.map((x, k) => dateLi(x, from + k)).join('')}</ol>
+    ${dates.length > shown.length ? `<details class="g-more"><summary>전체 일정 ${dates.length}개 보기</summary><ol class="g-dates">${dates.map(dateLi).join('')}</ol></details>` : ''}</div>` : '';
+  /* 시간표: 표 대신 한 줄 목록(옆으로 밀 필요 없음). 당일엔 진행 중인 교시 강조 */
   const tt = g.timetable && phase !== 'after' ? `<div class="g-block"><h4 class="sub-h">${esc(g.timetable.title || '시험 시간표')}</h4>${g.timetable.note ? `<p class="sub-d">${esc(g.timetable.note)}</p>` : ''}
-    ${table(['교시', '영역', '시간', '비고'], g.timetable.rows.map(r => [esc(r.period), esc(r.subject), {cls: 'cur', h: esc(r.time)}, esc(r.note || '')]))}<p class="sub-d">${srcLink(g.timetable.url, g.timetable.source || '공식 출처')}</p></div>` : '';
-  const secs = (g.sections || []).filter(s => !s.phases || s.phases.includes(phase)).map(s => `<div class="g-sec"><h4 class="sub-h">${esc(s.title)}</h4><ul class="notes">${s.items.map(t => `<li>${esc(t)}</li>`).join('')}</ul><p class="sub-d">${srcLink(s.url, s.source || '공식 출처')}</p></div>`).join('');
+    <ol class="g-tt">${g.timetable.rows.map(r => `<li class="${r.subject ? '' : 'rest'}" data-s="${esc(r.start)}" data-e="${esc(r.end)}"><span class="g-tt-p">${esc(r.period)}</span><span class="g-tt-s">${esc(r.subject || '')}</span><span class="g-tt-t num">${esc(r.time)}</span>${r.note ? `<span class="g-tt-n">${esc(r.note)}</span>` : ''}</li>`).join('')}</ol>
+    <p class="sub-d">${srcLink(g.timetable.url, g.timetable.source || '공식 출처')}</p></div>` : '';
+  /* 준비물 등 안내: 제목만 보이고 눌러서 펼친다 */
+  const secs = (g.sections || []).filter(s => !s.phases || s.phases.includes(phase)).map(s => `<details class="g-sec"><summary><span class="sub-h">${esc(s.title)}</span><span class="flat">${s.items.length}</span></summary><ul class="notes">${s.items.map(t => `<li>${esc(t)}</li>`).join('')}</ul><p class="sub-d">${srcLink(s.url, s.source || '공식 출처')}</p></details>`).join('');
   const benefits = (g.benefits || []);
+  const benCard = b => `<div class="g-ben"><div class="g-ben-top"><strong>${esc(b.org)}</strong>${b.category ? `<span class="pill">${esc(b.category)}</span>` : ''}</div>
+      <p>${esc(b.desc)}</p><dl>${b.period ? `<dt>기간</dt><dd>${esc(b.period)}</dd>` : ''}${b.condition ? `<dt>조건</dt><dd>${esc(b.condition)}</dd>` : ''}</dl>
+      <div class="g-ben-foot">${srcLink(b.url, b.sourceType === 'official' ? '공식 안내' : '보도 기사')}<span class="flat">${esc(b.checkedAt || g.checkedAt)} 확인</span></div></div>`;
+  const BEN_FIRST = 6;
   const ben = benefits.length ? `<div class="g-block" id="csat-benefits"><h4 class="sub-h">${phase === 'after' ? '수험생 혜택' : '수능이 끝나면 받을 수 있는 혜택'} <span class="flat">${benefits.length}곳</span></h4>
     <p class="sub-d">${esc(g.benefitsNote || '업체·기관 사정으로 바뀌거나 일찍 끝날 수 있어요. 이용 전에 원문을 꼭 확인하세요. 이 사이트는 각 업체와 관계가 없어요.')}</p>
-    <div class="g-benefits">${benefits.map(b => `<div class="g-ben"><div class="g-ben-top"><strong>${esc(b.org)}</strong>${b.category ? `<span class="pill">${esc(b.category)}</span>` : ''}</div>
-      <p>${esc(b.desc)}</p><dl>${b.period ? `<dt>기간</dt><dd>${esc(b.period)}</dd>` : ''}${b.condition ? `<dt>조건</dt><dd>${esc(b.condition)}</dd>` : ''}</dl>
-      <div class="g-ben-foot">${srcLink(b.url, b.sourceType === 'official' ? '공식 안내' : '보도 기사')}<span class="flat">${esc(b.checkedAt || g.checkedAt)} 확인</span></div></div>`).join('')}</div></div>` : '';
+    <div class="g-benefits">${benefits.slice(0, BEN_FIRST).map(benCard).join('')}</div>
+    ${benefits.length > BEN_FIRST ? `<details class="g-more"><summary>혜택 ${benefits.length - BEN_FIRST}곳 더 보기</summary><div class="g-benefits">${benefits.slice(BEN_FIRST).map(benCard).join('')}</div></details>` : ''}</div>` : '';
   const live = phase === 'day' && g.timetable ? `<div class="g-live" id="g-live">${liveText(g.timetable.rows)}</div>` : '';
   el.innerHTML = head + live + `<div class="g-grid"><div class="g-col">${phase === 'after' ? ben : tt + secs}</div><div class="g-col">${timeline}${phase === 'after' ? secs : ''}</div></div>` + (phase !== 'after' ? ben : '');
   el.hidden = false;
   clearInterval(liveTimer);
-  if (phase === 'day' && g.timetable) liveTimer = setInterval(() => { const x = $('g-live'); if (x) x.innerHTML = liveText(g.timetable.rows); }, 30000);
+  if (phase === 'day' && g.timetable) { markPeriod(); liveTimer = setInterval(() => { const x = $('g-live'); if (x) x.innerHTML = liveText(g.timetable.rows); markPeriod(); }, 30000); }
+}
+function markPeriod() {
+  const now = NOW(), mins = now.getHours() * 60 + now.getMinutes(), m = s => { const [h, mm] = s.split(':').map(Number); return h * 60 + mm; };
+  document.querySelectorAll('.g-tt li').forEach(li => { li.classList.toggle('now', mins >= m(li.dataset.s) && mins < m(li.dataset.e)); li.classList.toggle('done', mins >= m(li.dataset.e)); });
 }
 /* 수능 당일: 지금 몇 교시인지 시간표로 계산 */
 let liveTimer = null;

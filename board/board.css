@@ -344,3 +344,28 @@ select{font:inherit;font-size:14px;color:var(--text);background:var(--panel-2);b
   .single .countdown>.hl{grid-column:2}
   .single .countdown>.src{grid-column:1/-1}
 }
+
+/* 시험 시간표: 한 줄 목록 */
+.g-tt{list-style:none;margin:0;padding:0;border:1px solid var(--line)}
+.g-tt li{display:grid;grid-template-columns:52px minmax(0,1fr) auto;column-gap:10px;row-gap:1px;align-items:baseline;padding:7px 12px;border-top:1px solid var(--line)}
+.g-tt li:first-child{border-top:0}
+.g-tt-p{font-weight:600;font-size:14px}
+.g-tt-s{font-size:14px;min-width:0}
+.g-tt-t{font-size:14px;color:var(--now);white-space:nowrap}
+.g-tt-n{grid-column:2/-1;font-size:12px;color:var(--muted);line-height:1.45}
+.g-tt li.rest{padding-block:4px}
+.g-tt li.rest .g-tt-p,.g-tt li.rest .g-tt-t{color:var(--muted);font-weight:400;font-size:13px}
+.g-tt li.now{background:var(--now-dim);box-shadow:inset 3px 0 0 var(--now)}
+.g-tt li.done{opacity:.55}
+/* 접기 */
+.g-sec{border-top:1px solid var(--line);padding-top:8px}
+.g-sec>summary,.g-more>summary{cursor:pointer;list-style:none;display:flex;align-items:baseline;gap:8px}
+.g-sec>summary::-webkit-details-marker,.g-more>summary::-webkit-details-marker{display:none}
+.g-sec>summary::before,.g-more>summary::before{content:'+';font-family:var(--mono);color:var(--muted);width:1ch}
+.g-sec[open]>summary::before,.g-more[open]>summary::before{content:'−'}
+.g-sec>summary .sub-h{margin:0}
+.g-sec[open]>ul{margin-top:6px}
+.g-more{margin-top:8px}
+.g-more>summary{font-size:13px;color:var(--muted);padding:6px 0}
+.g-more>summary:hover{color:var(--text)}
+.g-more[open]>summary{margin-bottom:6px}
