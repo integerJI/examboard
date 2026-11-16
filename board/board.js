@@ -36,12 +36,12 @@ function donut(size, now, prev, center = '') {
   return `<svg class="donut" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true">${ring(r1, now, 'r-now', w1)}${prev === undefined ? '' : ring(r2, prev, 'r-prev', w2)}${center}</svg>`;
 }
 function columns([lo, hi], prev, curr, unit = '점') { /* 점수·경쟁률: 두 해 막대를 같은 눈금에 */
-  const h = 64, wpx = 84;
+  const h = 64, wpx = 96;
   const y = v => h - (Math.min(Math.max(v, lo), hi) - lo) / (hi - lo) * h;
   const bar = (v, x, fill) => v == null ? '' : `<rect x="${x}" width="22" rx="3" y="${h}" height="0" data-y="${y(v)}" data-h="${h - y(v)}" style="fill:${fill};transition:all .9s ease-out"/>`;
   return `<div class="gauge"><svg width="${wpx}" height="${h + 16}" viewBox="0 0 ${wpx} ${h + 16}" aria-hidden="true">
     <line x1="0" x2="${wpx}" y1="${h}" y2="${h}" style="stroke:var(--line-2)"/>${bar(prev, 14, 'var(--prev)')}${bar(curr, 46, 'var(--now)')}
-    <text x="0" y="${h + 13}" style="fill:var(--faint);font-size:10px">${lo}–${hi}${unit === '점' ? '점' : ''} 눈금</text></svg></div>`;
+    <text x="0" y="${h + 13}" style="fill:var(--faint);font-size:11px">${unit === '명' ? `${nf(lo / 1e4, 0)}–${nf(hi / 1e4, 0)}만 명` : `${lo}–${hi}${unit === '점' ? '점' : ''}`} 눈금</text></svg></div>`;
 }
 function spark(points) {
   const w = 240, h = 30, vs = points.map(p => p.value), lo = Math.min(...vs) - 3, hi = Math.max(...vs) + 3;
@@ -83,7 +83,7 @@ const counted = (v, u, d) => {
 /* ---------- 상태 ---------- */
 let IDX, SUM, SCHED, VIEW = 'home', openId = null, HERO_ID = null;
 const SINGLE = () => IDX.categories.length === 1;   /* 분야가 하나뿐이면 탭 없는 한 페이지 */
-const title = s => s.exam === 'csat' ? `수능 ${s.subject}` : `${s.short}${s.stageName ? ` ${s.stageName}` : ''}`;
+const title = s => s.title ? s.title : s.exam === 'csat' ? `수능 ${s.subject}` : `${s.short}${s.stageName ? ` ${s.stageName}` : ''}`;
 const fullTitle = s => s.exam === 'csat' ? `수능 ${s.subject}` : `${s.examName}${s.stageName ? ` ${s.stageName}` : ''}`;
 const valTxt = (s, v) => `${s.unit === '명' ? nf(v, 0) : fx(v, s.decimals)}${s.unit}`;
 const dlOf = s => fromDiff(s.diff);
@@ -92,7 +92,7 @@ function caption(s) {
   const c = s.context || {};
   if (s.metric === 'pass_rate' && c.appeared != null && c.passed != null) return `응시 ${nf(c.appeared, 0)}명 중 ${nf(c.passed, 0)}명 합격`;
   if (s.metric === 'competition' && c.quota != null && c.applied != null) return [`선발 예정 ${nf(c.quota, 0)}명에 ${nf(c.applied, 0)}명 지원`, s.caption].filter(Boolean).join(' · ');
-  const extra = c.applied != null && s.metric === 'sitting_rate' ? `지원 ${nf(c.applied, 0)}명` : c.appeared != null && s.exam === 'csat' ? `응시 ${nf(c.appeared, 0)}명` : '';
+  const extra = c.applied != null && s.metric === 'sitting_rate' ? `지원 ${nf(c.applied, 0)}명` : c.appeared != null && s.exam === 'csat' && s.metric !== 'appeared' ? `응시 ${nf(c.appeared, 0)}명` : '';
   return [s.caption, extra].filter(Boolean).join(' · ');
 }
 
@@ -101,8 +101,8 @@ function tileHTML(s, i) {
   const dl = dlOf(s);
   const viz = s.unit === '%' ? donut(84, s.curr.value, s.prev ? s.prev.value : undefined) : s.scale ? columns(s.scale, s.prev?.value, s.curr.value, s.unit) : '';
   return `<article class="tile" role="button" tabindex="0" data-id="${esc(s.id)}" aria-pressed="${s.id === openId}" style="animation-delay:${i * 35}ms">
-    <div class="tile-top"><div><div class="tile-name">${esc(s.exam === 'csat' ? `수능 ${s.subject}` : s.examName)} <span class="tile-sub">${esc(s.exam === 'csat' ? s.label : s.stageName)}</span></div>
-      <div class="tile-about">${esc(s.about)}</div>
+    <div class="tile-top"><div><div class="tile-name">${esc(s.title || (s.exam === 'csat' ? `수능 ${s.subject}` : s.examName))} <span class="tile-sub">${esc(s.exam === 'csat' ? s.label : s.stageName)}</span></div>
+      ${SINGLE() ? '' : `<div class="tile-about">${esc(s.about)}</div>`}
       <div class="tile-sub">${esc(s.label)} · ${s.prev ? `${esc(s.prev.label)} → ` : ''}${esc(s.curr.label)}</div></div>${chip(dl)}</div>
     <div class="tile-mid">${viz}<div style="min-width:0"><div class="tile-val">${counted(s.curr.value, s.unit, s.decimals)}</div>
       <div class="tile-prev">${s.prev ? `${esc(s.prev.label)} ${valTxt(s, s.prev.value)}` : '<span class="missing">이전 연도 없음</span>'}</div>
@@ -145,7 +145,7 @@ function route() {
     VIEW = IDX.categories[0].id; $('view-cat').hidden = false;
     if (!$('guide').dataset.ready) { $('guide').dataset.ready = 1; renderGrid(); }
     if (item) openDetail(item.id, {silent: true});
-    else { if (openId) closeDetail(true); if (h === VIEW || h === 'cuts') $(h === 'cuts' ? 'cycler' : 'guide').scrollIntoView({behavior: REDUCED ? 'auto' : 'smooth'}); }
+    else { if (openId) closeDetail(true); if (h === VIEW || h === 'cuts') $(h === 'cuts' ? (PHASE === 'released' ? 'cuts-block' : 'cycler') : 'guide').scrollIntoView({behavior: REDUCED ? 'auto' : 'smooth'}); }
     return;
   }
   const next = item ? item.category : IDX.categories.some(c => c.id === h) ? h : 'home';
@@ -194,44 +194,66 @@ function renderDiverge() {
 const NOW = () => { const q = new URLSearchParams(location.search).get('asOf'); const d = q ? new Date(q) : new Date(); return isNaN(d) ? new Date() : d; };
 const dayDiff = iso => { const t = NOW(); t.setHours(0, 0, 0, 0); return Math.round((new Date(iso + 'T00:00:00') - t) / 864e5); };
 const md = iso => { const d = new Date(iso + 'T00:00:00'); return `${d.getMonth() + 1}월 ${d.getDate()}일(${'일월화수목금토'[d.getDay()]})`; };
+/* 히어로: "무엇까지 며칠"을 한 문장으로 + 수능 → 정답 확정 → 성적 통지 → 정시 원서 단계 */
+const STEP_KEYS = [['수능 시험일', '수능'], ['정답 확정', '정답 확정'], ['성적 통지', '성적 통지'], ['정시 원서', '정시 원서접수']];
+function heroSteps(s) {
+  const ds = GUIDE?.dates || [];
+  const steps = STEP_KEYS.map(([k, name]) => {
+    const d = ds.find(x => x.label.startsWith(k));
+    if (d) return {name, date: d.date, end: d.end};
+    if (k === '수능 시험일' && s.examDate) return {name, date: s.examDate};
+    if (k === '성적 통지' && s.resultDate) return {name, date: s.resultDate};
+    return null;
+  }).filter(Boolean);
+  return steps;
+}
+const mdShort = iso => { const d = new Date(iso + 'T00:00:00'); return `${d.getMonth() + 1}/${d.getDate()}`; };
 function renderCountdown() {
   const s = SCHED.items.filter(i => i.examDate || i.resultDate).sort((x, y) => (x.examDate ?? '').localeCompare(y.examDate ?? ''))[0];
   HERO_ID = s?.id;
   if (!s) { $('countdown').innerHTML = '<p class="sub-d">예정된 시험 일정이 없습니다. data/src/schedule.json에 추가하세요.</p>'; return; }
-  const dEx = s.examDate ? dayDiff(s.examDate) : null, dRes = s.resultDate ? dayDiff(s.resultDate) : null;
-  let big, cap;
-  if (dEx != null && dEx > 0) { big = `D-${dEx}`; cap = '시험까지'; }
-  else if (dEx === 0) { big = 'D-DAY'; cap = '오늘 시험'; }
-  else if (dRes != null && dRes > 0) { big = `D-${dRes}`; cap = `${s.resultLabel ?? '결과'}까지`; }
-  else if (dRes === 0) { big = 'D-DAY'; cap = `오늘 ${s.resultLabel ?? '결과'}`; }
-  else { big = '결과 발표'; cap = `${s.resultDate ? md(s.resultDate) + ' ' : ''}${s.resultLabel ?? '결과'} 완료`; }
-  const released = dRes != null && dRes <= 0;
-  const ap = s.applicants, total = ap?.total, colors = ['var(--now)', 'var(--now-2)', 'var(--prev)'];
-  let seg = '', acc = 0;
-  if (ap) {
-    const size = 120, c = 60, r = 48, L = 2 * Math.PI * r;
-    seg = ap.breakdown.map((p, i) => { const len = p.value / total * L, o = -acc; acc += len;
-      return `<circle cx="${c}" cy="${c}" r="${r}" stroke-width="14" style="stroke:${colors[i]}" stroke-dasharray="${len} ${L - len}" stroke-dashoffset="${L}" data-off="${o}" transform="rotate(-90 ${c} ${c})"/>`; }).join('');
-    seg = `<svg class="donut" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle class="track" cx="${c}" cy="${c}" r="${r}" stroke-width="14"/>${seg}
-      <text x="${c}" y="${c - 2}" text-anchor="middle" style="font-size:12px;fill:var(--muted);font-weight:500">지원자</text><text x="${c}" y="${c + 16}" text-anchor="middle" style="font-size:15px">${nf(total / 1e4, 1)}만</text></svg>`;
+  const ph = pagePhase(s), steps = heroSteps(s);
+  /* 다음 단계: 시험 끝난 저녁엔 수능을 지난 것으로 본다 */
+  const left = st => dayDiff(st.end || st.date);
+  const nextI = steps.findIndex(st => left(st) >= 0 && !(ph === 'evening' && st.name === '수능'));
+  const nx = steps[nextI];
+  let head, sub = '';
+  if (ph === 'day') { head = `오늘 <b>수능</b>이에요`; sub = GUIDE?.entryTime ? `입실 ${esc(GUIDE.entryTime)}까지 · 응원해요` : '응원해요'; }
+  else if (!nx) { head = `<b>${esc(steps.at(-1)?.name || '일정')}</b>까지 모두 끝났어요`; }
+  else {
+    const d0 = dayDiff(nx.date);
+    head = d0 > 0 ? `<b>${esc(nx.name)}</b>까지 <span class="cd-n num">${d0}</span>일`
+      : nx.end ? `<b>${esc(nx.name)}</b> 진행 중 <span class="cd-then">마감까지 <span class="cd-n num">${dayDiff(nx.end)}</span>일</span>` : `오늘 <b>${esc(nx.name)}</b>`;
+    sub = nx.end ? `${md(nx.date)} ~ ${md(nx.end)}` : md(nx.date);
+    if (ph === 'before' && nx.name === '수능' && GUIDE?.entryTime) sub += ` · 입실 ${esc(GUIDE.entryTime)}까지`;
+    if (ph === 'evening') head = `수능 끝, 고생 많았어요 <span class="cd-then">다음은 ${head}</span>`;
   }
-  const dl = ap ? delta('명', ap.previousTotal, total) : null;
-  const doneMsg = dEx == null || dEx >= 0 || s.group !== '수능' ? ''
-    : released ? `<p class="cd-done">성적이 나왔어요. <a href="#cuts">공식 등급컷·작년 대비 보기 →</a> · <a href="#csat">남은 일정·혜택 →</a></p>`
-    : `<p class="cd-done">수능 보느라 고생 많았어요. <a href="#csat">수험생 혜택·남은 일정 보기 →</a></p>`;
-  const tag = dEx != null && dEx < 0 ? (released ? '결과 발표' : '채점 중') : '다가오는 시험';
-  $('countdown').innerHTML = `<div class="eyebrow"><span class="pill live">${tag}</span>${esc(s.group)}</div>
-    <h3>${esc(s.name)}</h3>
-    ${doneMsg}
-    <div class="dday"><div><div class="big num">${big}</div><div class="stat-lab">${cap}</div></div>
-      <div class="dates">${s.examDate ? `<span>시험 <b>${md(s.examDate)}</b></span>` : ''}${s.resultDate ? `<span>${esc(s.resultLabel ?? '결과')} <b>${md(s.resultDate)}</b></span>` : ''}</div></div>
-    ${ap ? `<div class="cd-body">${seg}<div style="min-width:0"><div class="stat-lab">${esc(ap.label)} 인원</div>
-      <div class="stat-big">${counted(total, '명')}</div>
-      <div class="stat-lab">${esc(ap.previousLabel)} ${nf(ap.previousTotal, 0)}명 대비 <span class="${dl.cls}">${dl.txt} (${dl.sub})</span></div>
-      <div class="mix">${ap.breakdown.map((p, i) => `<div class="mix-row"><i style="background:${colors[i]}"></i><span>${esc(p.name)}</span><span class="num">${nf(p.value, 0)}명 · ${fx(p.value / total * 100, 1)}%</span></div>`).join('')}</div></div></div>
-      <div class="hl">${ap.highlights.map(h => `<div><strong><span class="num">${h.unit === '명' ? nf(h.value, 0) : fx(h.value, 1)}</span><span class="u">${esc(h.unit)}</span></strong><span>${esc(h.label)}${h.note ? ` · ${esc(h.note)}` : ''}</span></div>`).join('')}</div>
-      <div class="src">출처: ${esc(ap.source)} <span class="pill">B</span> · ${ext(ap.sourceUrl, '기사')} · ${ext(s.sourceUrl, '시행 일정')}</div>` : ''}`;
-  animate($('countdown'));
+  const stepHTML = steps.length ? `<ol class="cd-steps" aria-label="수능 이후 단계">${steps.map((st, i) => {
+    const done = left(st) < 0 || (ph === 'evening' && st.name === '수능');
+    const cls = done ? 'done' : i === nextI || (ph === 'day' && st.name === '수능') ? 'next' : '';
+    return `<li class="${cls}"><span class="cd-dot" aria-hidden="true"></span><span class="cd-sn">${esc(st.name)}</span><span class="cd-sd num">${mdShort(st.date)}${st.end ? `~${mdShort(st.end)}` : ''}</span></li>`;
+  }).join('')}</ol>` : '';
+  const released = s.resultDate && dayDiff(s.resultDate) <= 0;
+  const action = ph === 'evening' ? `<a href="#csat">정답·예상 등급컷 확인 →</a><a href="#cuts">작년 공식 등급컷 →</a>`
+    : ph === 'wait' ? `<a href="#csat">수험생 혜택·남은 일정 →</a><a href="#cuts">작년 공식 등급컷 →</a>`
+    : released ? `<a href="#cuts">공식 등급컷·작년 대비 →</a><a href="#csat">정시 일정 →</a>`
+    : `<a href="#csat">시간표·준비물 →</a><a href="#cuts">작년 공식 등급컷 →</a>`;
+  const tag = ph === 'day' ? '시험 당일' : ph === 'evening' ? '시험 종료' : ph === 'wait' ? '채점 중' : ph === 'released' ? '결과 발표' : '다가오는 시험';
+  /* 지원자 통계: 시험 전에만 한 줄 요약 + 접기 */
+  const ap = s.applicants, total = ap?.total, colors = ['var(--now)', 'var(--now-2)', 'var(--prev)'];
+  let apHTML = '';
+  if (ap && (ph === 'before' || ph === 'day')) {
+    const dl = delta('명', ap.previousTotal, total);
+    apHTML = `<details class="cd-ap"><summary><span>지원자 <b class="num">${nf(total, 0)}</b>명</span><span class="flat">${esc(ap.previousLabel)}보다 <span class="${dl.cls}">${dl.txt} (${dl.sub})</span></span><span class="cd-more">구성 보기</span></summary>
+      <div class="mix">${ap.breakdown.map((p, i) => `<div class="mix-row"><i style="background:${colors[i]}"></i><span>${esc(p.name)}</span><span class="num">${nf(p.value, 0)}명 · ${fx(p.value / total * 100, 1)}%</span></div>`).join('')}</div>
+      <ul class="cd-hl">${ap.highlights.map(h => `<li><b class="num">${h.unit === '명' ? nf(h.value, 0) : fx(h.value, 1)}${esc(h.unit)}</b> ${esc(h.label)}${h.note ? ` · ${esc(h.note)}` : ''}</li>`).join('')}</ul>
+      <div class="src">출처: ${esc(ap.source)} <span class="pill">B</span> · ${ext(ap.sourceUrl, '기사')} · ${ext(s.sourceUrl, '시행 일정')}</div></details>`;
+  }
+  $('countdown').innerHTML = `<div class="eyebrow"><span class="pill live">${tag}</span>${esc(s.name)}</div>
+    <p class="cd-head">${head}</p>${sub ? `<p class="cd-sub">${sub}</p>` : ''}
+    ${stepHTML}
+    <p class="cd-act">${action}</p>
+    ${apHTML}`;
 }
 
 let spotIdx = 0, spotTimer = null, spotList = [];
@@ -317,6 +339,22 @@ async function startCycler() {
 /* ---------- 수능 안내(시간표·준비물·일정·혜택) — 날짜에 따라 시험 전/당일/후 화면이 바뀐다 ---------- */
 let GUIDE = null;
 const resultOut = () => { const s = SCHED.items.find(i => i.id === HERO_ID); return !!(s?.resultDate && dayDiff(s.resultDate) <= 0); };
+let PHASE = 'before';
+const hhmm = d => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+const examEnd = () => (GUIDE?.timetable?.rows || []).reduce((m, r) => (r.end > m ? r.end : m), '17:45');
+/* 화면 단계: before 시험 전 / day 시험 중 / evening 시험 끝난 저녁 / wait 결과 대기 / released 결과 발표 후 */
+function pagePhase(s) {
+  if (!s?.examDate) return 'before';
+  const dEx = dayDiff(s.examDate), dRes = s.resultDate ? dayDiff(s.resultDate) : null;
+  if (dEx > 0) return 'before';
+  if (dEx === 0) return hhmm(NOW()) >= examEnd() ? 'evening' : 'day';
+  return dRes != null && dRes <= 0 ? 'released' : 'wait';
+}
+function applyPhase() {
+  PHASE = pagePhase(SCHED.items.find(i => i.id === HERO_ID));
+  document.body.classList.remove('ph-before', 'ph-day', 'ph-evening', 'ph-wait', 'ph-released');
+  document.body.classList.add(`ph-${PHASE}`);
+}
 const guidePhase = g => { const d = dayDiff(g.examDate); return d > 0 ? 'before' : d === 0 ? 'day' : 'after'; };
 async function loadGuide() {
   const meta = (IDX.guides || []).find(x => x.exam === 'csat');
@@ -348,21 +386,36 @@ async function renderGuide() {
     <ol class="g-tt">${g.timetable.rows.map(r => `<li class="${r.subject ? '' : 'rest'}" data-s="${esc(r.start)}" data-e="${esc(r.end)}"><span class="g-tt-p">${esc(r.period)}</span><span class="g-tt-s">${esc(r.subject || '')}</span><span class="g-tt-t num">${esc(r.time)}</span>${r.note ? `<span class="g-tt-n">${esc(r.note)}</span>` : ''}</li>`).join('')}</ol>
     <p class="sub-d">${srcLink(g.timetable.url, g.timetable.source || '공식 출처')}</p></div>` : '';
   /* 준비물 등 안내: 제목만 보이고 눌러서 펼친다 */
-  const secs = (g.sections || []).filter(s => !s.phases || s.phases.includes(phase)).map(s => `<details class="g-sec"><summary><span class="sub-h">${esc(s.title)}</span><span class="flat">${s.items.length}</span></summary><ul class="notes">${s.items.map(t => `<li>${esc(t)}</li>`).join('')}</ul><p class="sub-d">${srcLink(s.url, s.source || '공식 출처')}</p></details>`).join('');
-  const benefits = (g.benefits || []);
-  const benCard = b => `<div class="g-ben"><div class="g-ben-top"><strong>${esc(b.org)}</strong>${b.category ? `<span class="pill">${esc(b.category)}</span>` : ''}</div>
-      <p>${esc(b.desc)}</p><dl>${b.period ? `<dt>기간</dt><dd>${esc(b.period)}</dd>` : ''}${b.condition ? `<dt>조건</dt><dd>${esc(b.condition)}</dd>` : ''}</dl>
-      <div class="g-ben-foot">${srcLink(b.url, b.sourceType === 'official' ? '공식 안내' : '보도 기사')}<span class="flat">${esc(b.checkedAt || g.checkedAt)} 확인</span></div></div>`;
+  const secHTML = s => `<details class="g-sec"${s.id === 'bring' && (PHASE === 'before' || PHASE === 'day') ? ' open' : ''}><summary><span class="sub-h">${esc(s.title)}</span><span class="flat">${s.items.length}</span></summary><ul class="notes">${s.items.map(x => `<li>${esc(x)}</li>`).join('')}</ul><p class="sub-d">${srcLink(s.url, s.source || '공식 출처')}</p></details>`;
+  const secList = (g.sections || []).filter(s => !s.phases || s.phases.includes(phase));
+  const secs = secList.map(secHTML).join('');
+  const BEN_ORDER = ['놀이공원', '전시·관람', '문화·공연', '외식', '숙박·휴양', '항공', '미용'];
+  const benefits = (g.benefits || []).slice().sort((x, y) => (BEN_ORDER.indexOf(x.category) + 1 || 99) - (BEN_ORDER.indexOf(y.category) + 1 || 99));
+  /* 혜택 카드: 모든 카드가 같은 칸 구성(분류·출처 → 이름 → 혜택 → 기간·조건 → 확인일) */
+  const benCard = b => `<article class="g-ben"><div class="g-ben-top"><span class="pill">${esc(b.category || '기타')}</span><span class="g-ben-kind ${b.sourceType === 'official' ? 'off' : ''}">${b.sourceType === 'official' ? '공식 안내' : '보도 기사'}</span></div>
+      <h5 class="g-ben-org" title="${esc(b.org)}">${esc(b.org)}</h5><p class="g-ben-desc">${esc(b.desc)}</p>
+      <dl><dt>기간</dt><dd>${esc(b.period || '—')}</dd><dt>조건</dt><dd>${esc(b.condition || '—')}</dd></dl>
+      <div class="g-ben-foot">${srcLink(b.url, '원문 보기')}<span>${esc(b.checkedAt || g.checkedAt)} 확인</span></div></article>`;
   const BEN_FIRST = 6;
   const ben = benefits.length ? `<div class="g-block" id="csat-benefits"><h4 class="sub-h">${phase === 'after' ? '수험생 혜택' : '수능이 끝나면 받을 수 있는 혜택'} <span class="flat">${benefits.length}곳</span></h4>
     <p class="sub-d">${esc(g.benefitsNote || '업체·기관 사정으로 바뀌거나 일찍 끝날 수 있어요. 이용 전에 원문을 꼭 확인하세요. 이 사이트는 각 업체와 관계가 없어요.')}</p>
     <div class="g-benefits">${benefits.slice(0, BEN_FIRST).map(benCard).join('')}</div>
     ${benefits.length > BEN_FIRST ? `<details class="g-more"><summary>혜택 ${benefits.length - BEN_FIRST}곳 더 보기</summary><div class="g-benefits">${benefits.slice(BEN_FIRST).map(benCard).join('')}</div></details>` : ''}</div>` : '';
-  const live = phase === 'day' && g.timetable ? `<div class="g-live" id="g-live">${liveText(g.timetable.rows)}</div>` : '';
-  el.innerHTML = head + live + `<div class="g-grid"><div class="g-col">${phase === 'after' ? ben : tt + secs}</div><div class="g-col">${timeline}${phase === 'after' ? secs : ''}</div></div>` + (phase !== 'after' ? ben : '');
+  const live = PHASE === 'day' && g.timetable ? `<div class="g-live" id="g-live">${liveText(g.timetable.rows)}</div>` : '';
+  const banner = (title, msg) => `<div class="g-banner"><strong>${esc(title)}</strong><span>${esc(msg)}</span></div>`;
+  const links = (g.afterExamLinks || []).length ? `<div class="g-links">${g.afterExamLinks.map(l => `<a class="g-link" href="${esc(l.url)}" target="_blank" rel="noopener"><strong>${esc(l.label)} ↗</strong><span class="flat">${esc(l.org)}</span><span>${esc(l.note || '')}</span></a>`).join('')}</div>` : '';
+  const grid2 = (a, b) => `<div class="g-grid"><div class="g-col">${a}</div><div class="g-col">${b}</div></div>`;
+  const rest = secList.filter(s => s.id !== 'bring').map(secHTML).join(''), bring = secList.filter(s => s.id === 'bring').map(secHTML).join('');
+  let A, B;
+  if (PHASE === 'before' || PHASE === 'day') { A = head + live + grid2(tt, bring + rest); B = grid2(timeline, '') + ben; }
+  else if (PHASE === 'evening') { A = banner(g.afterExamTitle || '오늘 정말 고생 많았어요', '정답과 예상 등급컷은 아래 공식·입시기관 누리집에서 확인하고, 이 사이트에서는 작년 공식 등급컷과 비교해 보세요.') + links; B = grid2(timeline, secs) + ben; }
+  else if (PHASE === 'wait') { A = head + ben; B = grid2(timeline, secs); }
+  else { A = banner('성적이 나왔어요', g.afterResultMessage || '') + grid2(timeline, secs); B = ben; }
+  el.innerHTML = A;
+  $('guide-b').innerHTML = B; $('guide-b').hidden = !B;
   el.hidden = false;
   clearInterval(liveTimer);
-  if (phase === 'day' && g.timetable) { markPeriod(); liveTimer = setInterval(() => { const x = $('g-live'); if (x) x.innerHTML = liveText(g.timetable.rows); markPeriod(); }, 30000); }
+  if (PHASE === 'day' && g.timetable) { markPeriod(); liveTimer = setInterval(() => { const x = $('g-live'); if (x) x.innerHTML = liveText(g.timetable.rows); markPeriod(); }, 30000); }
 }
 function markPeriod() {
   const now = NOW(), mins = now.getHours() * 60 + now.getMinutes(), m = s => { const [h, mm] = s.split(':').map(Number); return h * 60 + mm; };
@@ -550,7 +603,8 @@ document.addEventListener('keydown', e => {
     $('cats').innerHTML = `<p class="missing">데이터를 읽지 못했습니다(${esc(err.message)}). python work/build_v1.py 로 data/v1 을 만들었는지, 로컬 서버로 열었는지 확인하세요.</p>`; return;
   }
   if (IDX.site?.name) { document.querySelector('.brand span').textContent = IDX.site.name; document.title = IDX.site.name; }
-  startClock(); renderMeta(meta.generatedAt); renderTicker(); renderCountdown(); renderIssue();
+  if (SINGLE()) await loadGuide();
+  startClock(); renderMeta(meta.generatedAt); renderTicker(); renderCountdown(); applyPhase(); renderIssue();
   if (SINGLE()) document.body.classList.add('single');
   else { renderRates(); renderCats(); renderSchedule(); renderDiverge(); startSpot(); }
   addEventListener('hashchange', route);
